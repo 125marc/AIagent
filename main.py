@@ -14,6 +14,7 @@ from functions.run_python import run_python_file
 load_dotenv()
 api_key = os.environ.get("GEMINI_API_KEY")
 
+#schema for the available functions for the AI
 schema_get_files_info = types.FunctionDeclaration(
     name="get_files_info",
     description="Lists files in the specified directory along with their sizes, constrained to the working directory.",
@@ -83,10 +84,12 @@ available_functions = types.Tool(
 
 user_prompt = sys.argv
 
+#Error if the user does not prompt the AI
 if len(sys.argv) < 2:
     print("Error")
     sys.exit(1)
 
+#prompt for the AI
 system_prompt = """
 You are a helpful AI coding agent.
 
@@ -102,11 +105,11 @@ You are able to call these functions multiple times until you have a definitive 
 
 All paths you provide should be relative to the working directory. You do not need to specify the working directory in your function calls as it is automatically injected for security reasons.
 """
-
+#first prompt to AI
 messages = [
     types.Content(role="user", parts=[types.Part(text=user_prompt[1])]),
 ]
-
+#first generated content, likely with a function call
 client = genai.Client(api_key=api_key)
 model_name = "gemini-2.0-flash-001"
 response = client.models.generate_content(
@@ -114,20 +117,22 @@ response = client.models.generate_content(
     contents=messages, config=types.GenerateContentConfig(
     tools=[available_functions], system_instruction=system_prompt)
 )
-
-#response = client.models.generate_content(model = "gemini-2.0-flash-001", contents = messages)
+#function for the AI to call the available functions, passes in the function call from response from original request
 def call_function(function_call_part, verbose=False):
     if "--verbose" in user_prompt:
         print(f"Calling function: {function_call_part.name}({function_call_part.args})")
     print(f" - Calling function: {function_call_part.name}")
+    #available functions
     my_functions = {
         "get_files_info": get_files_info,
         "get_file_content": get_file_content,
         "run_python_file": run_python_file,
         "write_file": write_file
     }
+    #passing in the working directory
     kwargs = function_call_part.args
     kwargs["working_directory"] = "./calculator"
+    #return error object if the function call is not in the list of functions
     if function_call_part.name not in my_functions:
         return types.Content(
                     role="tool",
@@ -139,7 +144,9 @@ def call_function(function_call_part, verbose=False):
                     ],
                 )
     else:
+        #AI calls the function
         called_function = my_functions[function_call_part.name](**kwargs,)
+        #wrap the contents in a tool object
         contents = types.Content(
                 role="tool",
                 parts=[
@@ -149,10 +156,13 @@ def call_function(function_call_part, verbose=False):
                         )
                     ],
                 )
+        #if there is no response from the function return the exception
         if contents.parts[0].function_response.response is None:
             raise Exception("No function response")
+        #return just the results
         if "--verbose" in user_prompt:
             return f"-> {contents.parts[0].function_response.response}"
+        #return the whole response object
         return contents
     
 
@@ -169,12 +179,15 @@ if "--verbose" in user_prompt:
             # Actually perform the function call!
             print(call_function(function_call_part, "--verbose" in user_prompt))
 else:
+    #restrict the number of times the AI can call the functions
     for i in range(21):
+        #add the condidate responses into the message to be passed into generate_content
         for item in response.candidates:
             messages.append(item.content)
         if response.function_calls:
-    # Collect all function responses for this turn
+            # Collect all function responses for this turn
             tool_parts = []
+            #call function again if function was called, store function calls as object to add to messages
             for function_call_part in response.function_calls:
                 contents = call_function(function_call_part, "--verbose" in user_prompt)
                 tool_parts.append(
@@ -189,10 +202,13 @@ else:
                 role="tool",
                 parts=tool_parts
             )
+            #append message with tool object for the next response
             messages.append(content_for_messages)
         else:
+            #print the response and end the loop if AI does not call a function
             print(response.text)
             break
+        #new response based on previous responses
         response = client.models.generate_content(
                 model=model_name,
                 contents=messages, config=types.GenerateContentConfig(

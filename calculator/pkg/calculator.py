@@ -9,28 +9,23 @@ class Calculator:
             "/": lambda a, b: a / b,
         }
         self.precedence = {
-            "+": 1,
+            "+": 3,
             "-": 1,
             "*": 2,
             "/": 2,
         }
 
     def evaluate(self, expression):
-        print("evaluate: start", expression)
         if not expression or expression.isspace():
             return None
         tokens = expression.strip().split()
-        result = self._evaluate_infix(tokens)
-        print("evaluate: end", result)
-        return result
+        return self._evaluate_infix(tokens)
 
     def _evaluate_infix(self, tokens):
-        print("_evaluate_infix: start", tokens)
         values = []
         operators = []
 
         for token in tokens:
-            print("token:", token, "values:", values, "operators:", operators)
             if token in self.operators:
                 while (
                     operators
@@ -51,7 +46,6 @@ class Calculator:
         if len(values) != 1:
             raise ValueError("invalid expression")
 
-        print("_evaluate_infix: end", values[0])
         return values[0]
 
     def _apply_operator(self, operators, values):
@@ -65,12 +59,3 @@ class Calculator:
         b = values.pop()
         a = values.pop()
         values.append(self.operators[operator](a, b))
-
-# Test the calculator
-if __name__ == "__main__":
-    try:
-        calc = Calculator()
-        result = calc.evaluate("2 + 3")
-        print(result)
-    except Exception as e:
-        print(f"Error: {e}")
